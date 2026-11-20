@@ -40,6 +40,12 @@ app.post('/equipments', async (req, res) => {
     res.send(result);
 })
 
+app.get('/equipments', async (req, res) => {
+    const cursor = equipments.find();
+    const result = await cursor.toArray();
+    res.send(result);
+})
+
 app.get('/', (req, res) => {
   res.send('Equiply is running fine!');
 });
