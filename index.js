@@ -26,6 +26,12 @@ const connectedClient = await connectToMongoDB()
 const database = connectedClient.db('equiplydb')
 const users = database.collection('user')
 
+app.get('/users', async(req, res)=>{
+    const cursor = users.find({})
+    const result = await cursor.toArray()
+    res.send(result)
+})
+
 
 app.get('/', (req, res) => {
   res.send('Equiply is running fine!');
