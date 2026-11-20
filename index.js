@@ -25,6 +25,7 @@ export async function connectToMongoDB() {
 const connectedClient = await connectToMongoDB()
 const database = connectedClient.db('equiplydb')
 const users = database.collection('user')
+const equipments = database.collection('equipments')
 
 app.get('/users', async(req, res)=>{
     const cursor = users.find({})
@@ -32,6 +33,12 @@ app.get('/users', async(req, res)=>{
     res.send(result)
 })
 
+// equipments related API's
+app.post('/equipments', async (req, res) => {
+    const equipment = req.body;
+    const result = await equipments.insertOne(equipment);
+    res.send(result);
+})
 
 app.get('/', (req, res) => {
   res.send('Equiply is running fine!');
