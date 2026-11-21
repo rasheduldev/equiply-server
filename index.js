@@ -8,7 +8,7 @@ const port = process.env.PORT || 8000;
 app.use(cors())
 app.use(express.json())
 
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 
 const client = new MongoClient(process.env.MONGODB_URI);
 
@@ -45,6 +45,14 @@ app.get('/equipments', async (req, res) => {
     const result = await cursor.toArray();
     res.send(result);
 })
+
+app.delete('/equipments/:id', async (req, res) => {
+    const {id} = req.params;
+    const query = { _id: new ObjectId(id) };
+    const result = await equipments.deleteOne(query);
+    res.send(result);
+})
+
 
 app.get('/', (req, res) => {
   res.send('Equiply is running fine!');
