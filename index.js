@@ -93,6 +93,14 @@ app.get('/equipments', async (req, res) => {
     const result = await cursor.toArray();
     res.send(result);
 })
+
+app.get('/equipments/:id', async (req, res) => {
+    const {id} = req.params;
+    const query = { _id: new ObjectId(id) };
+    const result = await equipments.findOne(query);
+    res.send(result);
+})
+
 app.delete('/equipments/:id', async (req, res) => {
     const {id} = req.params;
     const query = { _id: new ObjectId(id) };
