@@ -31,6 +31,7 @@ const users = database.collection("user");
 const equipments = database.collection("equipments");
 const bookings = database.collection("bookings");
 const payments = database.collection("payments");
+const favorites = database.collection('favorites')
 app.get("/users", async (req, res) => {
   const cursor = users.find({});
   const result = await cursor.toArray();
@@ -275,6 +276,49 @@ app.post("/payments/checkout-verify", async (req, res) => {
     });
   }
 });
+
+// favorite related API's
+
+app.post('/favorites', async (req, res) => {
+    try {
+        const { userId, equipmentId } = req.body;
+        if (!userId || !equipmentId) {
+            return res.status(400).send({
+                success: false,
+                message: 'User ID and Equipment ID are required'
+            });
+        }
+        const existingFavorite = await favorites.findOne({
+            userId,
+            equipmentId
+        });
+        if (existingFavorite) {
+            return res.status(409).send({
+                success: false,
+                message: 'Equipment is already in favorites'
+            });
+        }
+        const favorite = {
+            userId,
+            equipmentId,
+            createdAt: new Date()
+        };
+        const result = await favorites.insertOne(favorite);
+        res.send({
+            success: true,
+            message: 'Added to favorites successfully',
+            insertedId: result.insertedId
+        });
+    } catch (error) {
+        console.error('Add favorite error:', error);
+
+        res.status(500).send({
+            success: false,
+            message: 'Failed to add favorite'
+        });
+    }
+});
+
 
 app.get("/", (req, res) => {
   res.send("Equiply is running fine!");
