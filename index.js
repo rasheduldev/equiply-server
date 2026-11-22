@@ -377,6 +377,44 @@ app.get('/favorites/:userId', async (req, res) => {
 });
 
 
+app.delete('/favorites/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).send({
+                success: false,
+                message: 'Invalid favorite ID'
+            });
+        }
+
+        const result = await favorites.deleteOne({
+            _id: new ObjectId(id)
+        });
+
+        if (result.deletedCount === 0) {
+            return res.status(404).send({
+                success: false,
+                message: 'Favorite not found'
+            });
+        }
+
+        res.send({
+            success: true,
+            message: 'Favorite removed successfully'
+        });
+
+    } catch (error) {
+        console.error('Remove favorite error:', error);
+
+        res.status(500).send({
+            success: false,
+            message: 'Failed to remove favorite'
+        });
+    }
+});
+
+
 app.get("/", (req, res) => {
   res.send("Equiply is running fine!");
 });
