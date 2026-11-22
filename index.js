@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors'
 import 'dotenv/config'
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const port = process.env.PORT || 8000;
@@ -26,7 +29,7 @@ const connectedClient = await connectToMongoDB()
 const database = connectedClient.db('equiplydb')
 const users = database.collection('user')
 const equipments = database.collection('equipments')
-
+const bookings = database.collection('bookings')
 app.get('/users', async(req, res)=>{
     const cursor = users.find({})
     const result = await cursor.toArray()
@@ -107,6 +110,15 @@ app.delete('/equipments/:id', async (req, res) => {
     const result = await equipments.deleteOne(query);
     res.send(result);
 })
+
+// bookings related API's
+app.post('/bookings', async (req, res) => {
+    const booking = req.body;
+    const result = await bookings.insertOne(booking);
+    res.send(result);
+});
+
+
 
 
 app.get('/', (req, res) => {
