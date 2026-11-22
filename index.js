@@ -320,6 +320,63 @@ app.post('/favorites', async (req, res) => {
 });
 
 
+app.get('/favorites/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        const result = await favorites.aggregate([
+            {
+                $match: { userId }
+            },
+            {
+                $addFields: {
+                    equipmentObjectId: {
+                        $convert: {
+                            input: '$equipmentId',
+                            to: 'objectId',
+                            onError: null,
+                            onNull: null
+                        }
+                    }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'equipments',
+                    localField: 'equipmentObjectId',
+                    foreignField: '_id',
+                    as: 'equipment'
+                }
+            },
+            {
+                $unwind: {
+                    path: '$equipment',
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $project: {
+                    equipmentObjectId: 0
+                }
+            },
+            {
+                $sort: { createdAt: -1 }
+            }
+        ]).toArray();
+
+        res.send(result);
+
+    } catch (error) {
+        console.error('Get favorites error:', error);
+
+        res.status(500).send({
+            success: false,
+            message: 'Failed to fetch favorites'
+        });
+    }
+});
+
+
 app.get("/", (req, res) => {
   res.send("Equiply is running fine!");
 });
