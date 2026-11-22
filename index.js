@@ -32,10 +32,42 @@ const equipments = database.collection("equipments");
 const bookings = database.collection("bookings");
 const payments = database.collection("payments");
 const favorites = database.collection('favorites')
+
+// users related API's
 app.get("/users", async (req, res) => {
   const cursor = users.find({});
   const result = await cursor.toArray();
   res.send(result);
+});
+
+app.get('/users/:id', async (req, res) => {
+    const { id } = req.params;
+
+    const result = await users.findOne({
+        _id: new ObjectId(id)
+    });
+
+    res.send(result);
+});
+
+app.patch('/users/:id', async (req, res) => {
+    const { id } = req.params;
+    const updatedProfile = req.body;
+
+    const result = await users.updateOne(
+        { _id: new ObjectId(id) },
+        {
+            $set: {
+                name: updatedProfile.name,
+                image: updatedProfile.image,
+                phone: updatedProfile.phone,
+                address: updatedProfile.address,
+                updatedAt: new Date()
+            }
+        }
+    );
+
+    res.send(result);
 });
 
 // equipments related API's
