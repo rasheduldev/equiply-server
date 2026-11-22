@@ -30,6 +30,7 @@ const database = connectedClient.db('equiplydb')
 const users = database.collection('user')
 const equipments = database.collection('equipments')
 const bookings = database.collection('bookings')
+const payments = database.collection('payments')
 app.get('/users', async(req, res)=>{
     const cursor = users.find({})
     const result = await cursor.toArray()
@@ -128,6 +129,125 @@ app.post('/bookings/pending', async (req, res) => {
     };
     const result = await bookings.insertOne(pendingBooking);
     res.send(result);
+});
+
+// Verify Stripe payment and update booking
+app.post('/payments/checkout-verify', async (req, res) => {
+    try {
+        const { sessionId } = req.body;
+
+        if (!sessionId) {
+            return res.status(400).send({
+                success: false,
+                message: 'Session ID is required'
+            });
+        }
+
+        // 1. Retrieve checkout session from Stripe
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+        // 2. Check payment status
+        if (session.status !== 'complete' || session.payment_status !== 'paid') {
+            return res.status(400).send({
+                success: false,
+                message: 'Payment verification failed'
+            });
+        }
+
+        // 3. Get customer ID from Stripe metadata
+        const userId = session.metadata?.userId;
+
+        if (!userId) {
+            return res.status(400).send({
+                success: false,
+                message: 'Customer ID not found'
+            });
+        }
+
+        // 4. Check whether this payment was already saved
+        const existingPayment = await payments.findOne({ sessionId });
+
+        if (existingPayment) {
+            return res.send({
+                success: true,
+                message: 'Payment already verified',
+                payment: existingPayment
+            });
+        }
+
+        // 5. Find the customer's pending booking
+        const pendingBookings = await bookings
+            .find({
+                userId,
+                paymentStatus: 'Pending'
+            })
+            .limit(2)
+            .toArray();
+
+        // We need exactly one pending booking
+        if (pendingBookings.length !== 1) {
+            return res.status(400).send({
+                success: false,
+                message: pendingBookings.length === 0
+                    ? 'No pending booking found'
+                    : 'Multiple pending bookings found. Cannot identify the correct booking.'
+            });
+        }
+
+        const booking = pendingBookings[0];
+
+        // 6. Update booking status
+        const bookingResult = await bookings.updateOne(
+            {
+                _id: booking._id,
+                paymentStatus: 'Pending'
+            },
+            {
+                $set: {
+                    paymentStatus: 'Paid',
+                    bookingStatus: 'Confirmed',
+                    paidAt: new Date()
+                }
+            }
+        );
+
+        if (bookingResult.modifiedCount === 0) {
+            return res.status(409).send({
+                success: false,
+                message: 'Booking has already been processed'
+            });
+        }
+
+        // 7. Save payment transaction
+        const payment = {
+            sessionId,
+            bookingId: booking._id,
+            userId,
+            customerEmail: session.customer_details?.email || session.customer_email,
+            paymentIntentId: session.payment_intent,
+            amount: session.amount_total / 100,
+            currency: session.currency,
+            paymentStatus: 'Paid',
+            paymentDate: new Date()
+        };
+
+        const paymentResult = await payments.insertOne(payment);
+
+        res.send({
+            success: true,
+            message: 'Payment verified successfully',
+            bookingResult,
+            paymentResult
+        });
+
+    } catch (error) {
+        console.error('Payment verification error:', error);
+
+        res.status(500).send({
+            success: false,
+            message: 'Something went wrong during payment verification'
+        });
+    }
 });
 
 
