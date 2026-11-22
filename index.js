@@ -118,6 +118,17 @@ app.post('/bookings', async (req, res) => {
     res.send(result);
 });
 
+app.post('/bookings/pending', async (req, res) => {
+    const booking = req.body;
+    const pendingBooking = {
+        ...booking,
+        paymentStatus: 'Pending',
+        bookingStatus: 'Pending',
+        createdAt: new Date(),
+    };
+    const result = await bookings.insertOne(pendingBooking);
+    res.send(result);
+});
 
 
 
