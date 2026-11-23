@@ -191,6 +191,22 @@ app.get("/admin/rentals", verifyToken, verifyAdmin, async (req, res) => {
 
     res.send(result);
 });
+app.get("/admin/analytics", verifyToken, verifyAdmin, async (req, res) => {
+    const [allUsers, allEquipments, allBookings, allPayments] =
+        await Promise.all([
+            users.find({}).toArray(),
+            equipments.find({}).toArray(),
+            bookings.find({}).toArray(),
+            payments.find({ paymentStatus: "Paid" }).toArray()
+        ]);
+
+    res.send({
+        users: allUsers,
+        equipments: allEquipments,
+        bookings: allBookings,
+        payments: allPayments
+    });
+});
 // users related API's
 app.get("/users", async (req, res) => {
   const cursor = users.find({});
@@ -226,6 +242,30 @@ app.patch('/users/:id', async (req, res) => {
     );
 
     res.send(result);
+});
+
+app.get("/owner/analytics", verifyToken, async (req, res) => {
+    if (req.user.role !== "owner") {
+        return res.status(403).send({
+            message: "Owner access required"
+        });
+    }
+    const ownerId = req.user._id.toString();
+
+    const ownerEquipments = await equipments.find({
+        ownerId: ownerId
+    }).toArray();
+
+    const equipmentIds = ownerEquipments.map(item => item._id.toString());
+
+    const ownerBookings = await bookings.find({
+        equipmentId: { $in: equipmentIds }
+    }).toArray();
+
+    res.send({
+        equipments: ownerEquipments,
+        bookings: ownerBookings
+    });
 });
 
 // equipments related API's
