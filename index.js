@@ -1,3 +1,5 @@
+import dns from 'node:dns';
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
@@ -17,7 +19,7 @@ const client = new MongoClient(process.env.MONGODB_URI);
 
 export async function connectToMongoDB() {
   try {
-    await client.connect();
+    // await client.connect();
     console.log("You successfully connected to MongoDB!");
     return client;
   } catch (err) {
@@ -697,3 +699,5 @@ app.get("/", (req, res) => {
 app.listen(port, () => {
   console.log(`Equiply is running on port ${port}`);
 });
+
+export default app;
