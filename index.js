@@ -28,11 +28,169 @@ export async function connectToMongoDB() {
 const connectedClient = await connectToMongoDB();
 const database = connectedClient.db("equiplydb");
 const users = database.collection("user");
+const sessions = database.collection("session");
 const equipments = database.collection("equipments");
 const bookings = database.collection("bookings");
 const payments = database.collection("payments");
 const favorites = database.collection('favorites')
 
+
+
+const verifyToken = async (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            return res.status(401).send({
+                message: "Unauthorized access"
+            });
+        }
+
+        const token = authHeader.split(" ")[1];
+
+        if (!token) {
+            return res.status(401).send({
+                message: "Unauthorized access"
+            });
+        }
+
+        // Find the session in Better Auth's session collection
+        const session = await sessions.findOne({
+            token,
+            expiresAt: { $gt: new Date() }
+        });
+
+        if (!session) {
+            return res.status(401).send({
+                message: "Invalid or expired session"
+            });
+        }
+
+        // Find the user associated with this session
+        const user = await users.findOne({
+            _id: session.userId
+        });
+
+        if (!user) {
+            return res.status(401).send({
+                message: "User not found"
+            });
+        }
+
+        req.user = user;
+
+        next();
+
+    } catch (error) {
+        console.error("Token verification error:", error);
+
+        return res.status(500).send({
+            message: "Internal server error"
+        });
+    }
+};
+
+
+const verifyAdmin = async (req, res, next) => {
+    if (req.user.role !== "admin") {
+        return res.status(403).send({
+            message: "Forbidden: Admin access required"
+        });
+    }
+    next();
+};
+
+// admin related API's
+app.get("/admin/users", verifyToken, verifyAdmin, async (req, res) => {
+    const result = await users.find({}).toArray();
+    res.send(result);
+});
+
+app.patch("/admin/users/:id/role", verifyToken, verifyAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { role } = req.body;
+
+    if (!["customer", "owner", "admin"].includes(role)) {
+        return res.status(400).send({ message: "Invalid role" });
+    }
+
+    if (req.user._id.toString() === id) {
+        return res.status(403).send({ message: "You cannot change your own role" });
+    }
+
+    const user = await users.findOne({ _id: new ObjectId(id) });
+
+    if (!user) {
+        return res.status(404).send({ message: "User not found" });
+    }
+
+    if (user.role === "admin" && role !== "admin") {
+        const adminCount = await users.countDocuments({ role: "admin" });
+
+        if (adminCount === 1) {
+            return res.status(400).send({ message: "At least one admin must remain" });
+        }
+    }
+
+    const result = await users.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { role } }
+    );
+
+    res.send(result);
+});
+
+app.get("/admin/equipments", verifyToken, verifyAdmin, async (req, res) => {
+    const result = await equipments.find({}).toArray();
+    res.send(result);
+});
+
+app.patch("/admin/equipments/:id/status", verifyToken, verifyAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const result = await equipments.updateOne(
+        { _id: new ObjectId(id) },
+        {
+            $set: {
+                status: status
+            }
+        }
+    );
+    res.send(result);
+});
+
+app.patch("/admin/equipments/:id", verifyToken, verifyAdmin, async (req, res) => {
+    const { id } = req.params;
+    const updatedEquipment = req.body;
+
+    const result = await equipments.updateOne(
+        { _id: new ObjectId(id) },
+        {
+            $set: updatedEquipment
+        }
+    );
+
+    res.send(result);
+});
+
+app.delete("/admin/equipments/:id", verifyToken, verifyAdmin, async (req, res) => {
+    const { id } = req.params;
+
+    const result = await equipments.deleteOne(
+        { _id: new ObjectId(id) }
+    );
+
+    res.send(result);
+});
+
+app.get("/admin/rentals", verifyToken, verifyAdmin, async (req, res) => {
+    const result = await bookings.find({})
+        .sort({ createdAt: -1 })
+        .toArray();
+
+    res.send(result);
+});
 // users related API's
 app.get("/users", async (req, res) => {
   const cursor = users.find({});
@@ -152,32 +310,52 @@ app.post("/bookings", async (req, res) => {
   res.send(result);
 });
 
+
+app.get("/bookings", async (req, res) => {
+  const result = await bookings.find().sort({ createdAt: -1 }).toArray();
+  res.send(result);
+});
+
 app.post("/bookings/pending", async (req, res) => {
-  try {
-    const booking = req.body;
+    try {
+        const booking = req.body;
 
-    const pendingBooking = {
-      ...booking,
-      paymentStatus: "Pending",
-      bookingStatus: "Pending",
-      createdAt: new Date(),
-    };
+        const equipment = await equipments.findOne({
+            _id: new ObjectId(booking.equipmentId)
+        });
 
-    const result = await bookings.insertOne(pendingBooking);
+        if (!equipment) {
+            return res.status(404).send({
+                success: false,
+                message: "Equipment not found"
+            });
+        }
 
-    res.send({
-      success: true,
-      message: "Pending booking created successfully",
-      bookingId: result.insertedId.toString(),
-    });
-  } catch (error) {
-    console.error("Pending booking error:", error);
+        const pendingBooking = {
+            ...booking,
+            ownerName: equipment.ownerName,
+            ownerEmail: equipment.ownerEmail,
+            paymentStatus: "Pending",
+            bookingStatus: "Pending",
+            createdAt: new Date(),
+        };
 
-    res.status(500).send({
-      success: false,
-      message: "Failed to create pending booking",
-    });
-  }
+        const result = await bookings.insertOne(pendingBooking);
+
+        res.send({
+            success: true,
+            message: "Pending booking created successfully",
+            bookingId: result.insertedId.toString(),
+        });
+
+    } catch (error) {
+        console.error("Pending booking error:", error);
+
+        res.status(500).send({
+            success: false,
+            message: "Failed to create pending booking",
+        });
+    }
 });
 
 app.get("/bookings/user/:userId", async (req, res) => {
@@ -445,6 +623,7 @@ app.delete('/favorites/:id', async (req, res) => {
         });
     }
 });
+
 
 
 app.get("/", (req, res) => {
